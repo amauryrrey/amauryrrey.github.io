@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caras y Gestos</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Caras y Gestos</h1>
+    <div class="container">
+        <div id="menu">
+            <button onclick="showAddTeams()">Nombrar equipos</button>
+            <button onclick="showAddPlayers()">Agregar personajes</button>
+            <button onclick="startGame()">Jugar</button>
+            <button onclick="showCharacters()">Mostrar personajes</button>
+        </div>
+
+        <div id="add-teams" class="hidden">
+            <h2>Nombrar equipos</h2>
+            <input type="text" id="team1-name" placeholder="Nombre del Equipo 1">
+            <input type="text" id="team2-name" placeholder="Nombre del Equipo 2">
+            <button onclick="saveTeamNames()">Guardar nombres</button>
+            <button onclick="returnToMenu()">Volver al menú</button>
+        </div>
+
+        <div id="add-players" class="hidden">
+            <h2>Agregar personajes</h2>
+            <input type="number" id="turn-time" placeholder="Tiempo del turno (segundos)">
+            <input type="text" id="character-input" placeholder="Nombre del personaje" onkeypress="handleKeyPress(event)">
+            <button onclick="addCharacter()">Agregar</button>
+            <button onclick="returnToMenu()">Volver al menú</button>
+        </div>
+
+        <div id="game" class="hidden">
+            <h2>Turno del equipo <span id="current-team">1</span></h2>
+            <p id="current-character"></p>
+            <button id="start-turn-button" onclick="startTurn()">Empezar turno</button>
+            <p id="timer">Tiempo restante: 60 segundos</p>
+            <button onclick="correctGuess()" class="hidden" id="correct-button">¡Correcto!</button>
+            <button onclick="nextCharacter()" class="hidden" id="next-button">Siguiente</button>
+            <button onclick="resetGame()">Reiniciar juego</button>
+            <button onclick="endGame()">Terminar juego</button>
+            <div class="scoreboard">
+                <div><span id="team1-name-display">Equipo 1</span>: <span id="team1-score">0</span></div>
+                <div><span id="team2-name-display">Equipo 2</span>: <span id="team2-score">0</span></div>
+            </div>
+        </div>
+
+        <div id="show-characters" class="hidden">
+            <h2>Personajes actuales</h2>
+            <button onclick="deleteAllCharacters()">Eliminar todos los personajes</button>
+            <ul id="character-list"></ul>
+            <button onclick="returnToMenu()">Volver al menú</button>
+        </div>
+    </div>
+
+    <script>
+        const originalCharacters = JSON.parse(localStorage.getItem('originalCharacters')) || [];
+        let characters = [];
+        let currentCharacterIndex = -1;
+        let currentTeam = 1;
+        let team1Score = 0;
+        let team2Score = 0;
+        let timerInterval;
+        let timeLeft = 60;
+
+        document.addEventListener('DOMContentLoaded', () => {
+   		loadTeamNames();
+    		loadOriginalCharacters();
+    		loadTurnTime(); // Cargar el tiempo de turno almacenado
+	});
+
+        function showAddTeams() {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('add-teams').classList.remove('hidden');
+        }
+
+        function saveTeamNames() {
+            const team1Name = document.getElementById('team1-name').value.trim();
+            const team2Name = document.getElementById('team2-name').value.trim();
+
+            if (team1Name) {
+                document.getElementById('team1-name-display').textContent = team1Name;
+                localStorage.setItem('team1Name', team1Name);
+            }
+            if (team2Name) {
+                document.getElementById('team2-name-display').textContent = team2Name;
+                localStorage.setItem('team2Name', team2Name);
+            }
+
+            returnToMenu();
+        }
+
+        function loadTeamNames() {
+            const team1Name = localStorage.getItem('team1Name');
+            const team2Name = localStorage.getItem('team2Name');
+
+            if (team1Name) {
+                document.getElementById('team1-name-display').textContent = team1Name;
+            }
+            if (team2Name) {
+                document.getElementById('team2-name-display').textContent = team2Name;
+            }
+        }
+
+        function showAddPlayers() {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('add-players').classList.remove('hidden');
+            document.getElementById('character-input').focus();
+        }
+
+        function startGame() {
+    const turnTimeInput = document.getElementById('turn-time');
+    if (turnTimeInput && turnTimeInput.value) {
+        timeLeft = parseInt(turnTimeInput.value, 10);
+
+        // Guardar el tiempo ingresado en el almacenamiento local
+        localStorage.setItem('turnTime', turnTimeInput.value);
+    } else {
+        timeLeft = 60; // Valor por defecto si no hay input
+    }
+
+    if (originalCharacters.length === 0) {
+        alert('Agrega personajes antes de comenzar el juego.');
+        return;
+    }
+
+    characters = [...originalCharacters];
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('game').classList.remove('hidden');
+    nextCharacter();
+}
+
+
+        function showCharacters() {
+            loadOriginalCharacters();
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('show-characters').classList.remove('hidden');
+        }
+
+        function returnToMenu() {
+            clearInterval(timerInterval);
+            document.getElementById('menu').classList.remove('hidden');
+            document.getElementById('add-teams').classList.add('hidden');
+            document.getElementById('add-players').classList.add('hidden');
+            document.getElementById('game').classList.add('hidden');
+            document.getElementById('show-characters').classList.add('hidden');
+        }
+
+        function addCharacter() {
+            const input = document.getElementById('character-input');
+            const character = input.value.trim();
+            if (character) {
+                originalCharacters.push(character);
+                localStorage.setItem('originalCharacters', JSON.stringify(originalCharacters));
+                input.value = '';
+                loadOriginalCharacters();
+            } else {
+                alert('El nombre no puede estar vacío.');
+            }
+        }
+
+        function loadOriginalCharacters() {
+            const list = document.getElementById('character-list');
+            list.innerHTML = '';
+            originalCharacters.forEach((character, index) => {
+                const li = document.createElement('li');
+                li.textContent = character;
+                const deleteButton = document.createElement('button');
+                const trashIcon = document.createElement('img');
+                trashIcon.src = 'basura.png';
+                trashIcon.alt = 'Eliminar';
+                trashIcon.style.width = '20px';
+                trashIcon.style.height = '20px';
+                deleteButton.appendChild(trashIcon);
+                deleteButton.onclick = () => deleteCharacter(index);
+                li.appendChild(deleteButton);
+                list.appendChild(li);
+            });
+        }
+
+        function deleteCharacter(index) {
+            originalCharacters.splice(index, 1);
+            localStorage.setItem('originalCharacters', JSON.stringify(originalCharacters));
+            loadOriginalCharacters();
+        }
+
+        function deleteAllCharacters() {
+            if (confirm('¿Estás seguro de que quieres eliminar todos los personajes?')) {
+                localStorage.removeItem('originalCharacters');
+                originalCharacters.length = 0;
+                loadOriginalCharacters();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                addCharacter();
+            }
+        }
+
+        function nextCharacter() {
+            if (characters.length === 0) {
+                alert('No hay más personajes.');
+                endGame();
+                return;
+            }
+            currentCharacterIndex = Math.floor(Math.random() * characters.length);
+            const character = characters[currentCharacterIndex];
+            document.getElementById('current-character').textContent = character;
+        }
+
+        function correctGuess() {
+            if (currentCharacterIndex === -1) return;
+
+            if (currentTeam === 1) {
+                team1Score++;
+                document.getElementById('team1-score').textContent = team1Score;
+            } else {
+                team2Score++;
+                document.getElementById('team2-score').textContent = team2Score;
+            }
+
+            characters.splice(currentCharacterIndex, 1);
+            nextCharacter();
+        }
+
+        function resetGame() {
+    // Reiniciar puntajes
+    team1Score = 0;
+    team2Score = 0;
+    document.getElementById('team1-score').textContent = team1Score;
+    document.getElementById('team2-score').textContent = team2Score;
+
+    // Restablecer base de datos de personajes
+    characters = [...originalCharacters];
+
+    // Reiniciar turno y equipo
+    currentTeam = 1;
+    document.getElementById('current-team').textContent = currentTeam;
+
+    // Detener temporizador si está en ejecución
+    clearInterval(timerInterval);
+    timerInterval = null;
+
+    // Restablecer tiempo desde el input
+    const turnTimeInput = document.getElementById('turn-time');
+    if (turnTimeInput && turnTimeInput.value) {
+        timeLeft = parseInt(turnTimeInput.value, 10);
+    } else {
+        timeLeft = 60; // Valor por defecto si no hay input
+    }
+    document.getElementById('timer').textContent = `Tiempo restante: ${timeLeft} segundos`;
+
+    // Habilitar el botón para iniciar el turno
+    document.getElementById('start-turn-button').disabled = false;
+
+    // Ocultar botones de acción del turno
+    document.getElementById('correct-button').classList.add('hidden');
+    document.getElementById('next-button').classList.add('hidden');
+
+    alert('Juego reiniciado. Comienza el turno del equipo 1.');
+}
+
+        function endTurn() {
+    // Detener el temporizador
+    clearInterval(timerInterval);
+    timerInterval = null;
+
+    // Ocultar botones
+    document.getElementById('correct-button').classList.add('hidden');
+    document.getElementById('next-button').classList.add('hidden');
+
+    // Cambiar de equipo
+    currentTeam = currentTeam === 1 ? 2 : 1;
+    document.getElementById('current-team').textContent = currentTeam;
+
+    // Limpiar el personaje actual
+    document.getElementById('current-character').textContent = '';
+
+    // Habilitar el botón para iniciar el turno
+    document.getElementById('start-turn-button').disabled = false;
+
+    // Reproducir sonido al finalizar el turno
+    const sound = new Audio('chicharra.mp3');
+    sound.play();
+
+    // Detener el sonido después de 3 segundos
+    setTimeout(() => {
+        sound.pause();
+        sound.currentTime = 0; // Reinicia el sonido
+    }, 3000);
+}
+
+
+
+        function startTurn() {
+    // Detener cualquier temporizador en curso
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+
+    // Obtener el tiempo personalizado del usuario
+    const turnTimeInput = document.getElementById('turn-time').value;
+    if (turnTimeInput && !isNaN(turnTimeInput)) {
+        timeLeft = parseInt(turnTimeInput, 10);
+    } else {
+        timeLeft = 60; // Valor por defecto si no se ha ingresado un tiempo válido
+    }
+
+    // Actualizar el cronómetro en la interfaz
+    document.getElementById('timer').textContent = `Tiempo restante: ${timeLeft} segundos`;
+    document.getElementById('start-turn-button').disabled = true;
+    document.getElementById('correct-button').classList.remove('hidden');
+    document.getElementById('next-button').classList.remove('hidden');
+
+    // Iniciar el temporizador
+    timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer').textContent = `Tiempo restante: ${timeLeft} segundos`;
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            endTurn();
+        }
+    }, 1000);
+}
+
+function loadTurnTime() {
+    const savedTime = localStorage.getItem('turnTime');
+    const turnTimeInput = document.getElementById('turn-time');
+    if (savedTime && turnTimeInput) {
+        turnTimeInput.value = savedTime;
+        timeLeft = parseInt(savedTime, 10); // Establecer como tiempo predeterminado
+    }
+}
+
+        function endGame() {
+            alert(`Juego terminado! Puntaje final: ${document.getElementById('team1-name-display').textContent}: ${team1Score}, ${document.getElementById('team2-name-display').textContent}: ${team2Score}`);
+            returnToMenu();
+        }
+    </script>
+</body>
+</html>
